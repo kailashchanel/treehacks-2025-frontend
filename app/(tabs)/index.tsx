@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Image, Text, StyleSheet, Dimensions, SafeAreaView } from "react-native";
+import { Button, View, Image, Text, StyleSheet, Dimensions, SafeAreaView } from "react-native";
 import { GestureHandlerRootView, GestureDetector, Gesture } from "react-native-gesture-handler";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 
@@ -7,6 +7,7 @@ import imagesApi from "../../api/images";
 import useApi from "../../hooks/useApi";
 
 import ActivityIndicator from "../../components/ActivityIndicator";
+import CustomModal from "@/components/Modal";
 
 const { width, height } = Dimensions.get("window");
 
@@ -26,23 +27,24 @@ const StarfieldOverlay = () => {
   const translateY = useSharedValue(0);
 
   const [loading, setLoading] = useState(true);
-  const [imageData, setImageData] = useState<ImageResponse | null>(null);
+  const [imageData, setImageData] = useState<ImageResponse>();
   const [error, setError] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const fetchImage = async () => {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/images");
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      const data: ImageResponse = await response.json();
+      setImageData(data);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
 
   useEffect(() => {
-    const fetchImage = async () => {
-      try {
-        const response = await fetch("http://127.0.0.1:8000/api/images");
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const data: ImageResponse = await response.json();
-        setImageData(data);
-      } catch (err) {
-        setError((err as Error).message);
-      }
-    };
-
     fetchImage();
     setLoading(false);
   }, [])
@@ -61,6 +63,7 @@ const StarfieldOverlay = () => {
   const handleTap = (event: any) => {
     const { locationX, locationY } = event.nativeEvent;
     setCoordinates({ x: locationX, y: locationY });
+    setModalVisible(true);
   };
 
   const panGesture = Gesture.Pan()
@@ -92,8 +95,8 @@ const StarfieldOverlay = () => {
   return (
     <>
     <ActivityIndicator visible={loading}/>
-      {!loading && <SafeAreaView>
-        <GestureHandlerRootView>
+      <SafeAreaView>
+        {!loading && <GestureHandlerRootView>
           {/* Reference Starfield (Guide) */}
           <Image source={{ uri: imageData?.starchart }} style={styles.overlay} resizeMode="contain" />
           
@@ -101,7 +104,7 @@ const StarfieldOverlay = () => {
           <GestureDetector gesture={Gesture.Race(panGesture, rotateGesture, pinchGesture)}>
             <Animated.View style={[styles.imageContainer, animatedStyle]}>
               <Image
-                source={{ uri: `${baseUrlTwo}${imageData?.img}` }}
+                source={{ uri: encodeURI(`${baseUrlTwo}${imageData?.img}`) }}
                 style={styles.image}
                 resizeMode="contain"
                 onStartShouldSetResponder={() => true}
@@ -115,8 +118,14 @@ const StarfieldOverlay = () => {
               )}
             </Animated.View>
           </GestureDetector>
-        </GestureHandlerRootView>
-      </SafeAreaView>}
+        </GestureHandlerRootView>}
+      </SafeAreaView>
+      <CustomModal visible={modalVisible} onClose={() => {setModalVisible(false);setLoading(true);fetchImage();setLoading(false);}} title="You clicked!">
+        <View style={{ alignItems: "center" }}>
+          <Text>Your selected coordinates are:</Text>
+          <Text>({parseFloat((coordinates?.x)?.toFixed(2))}, {parseFloat((coordinates?.y)?.toFixed(2))})</Text>
+        </View>
+      </CustomModal>
     </>
   );
 };
@@ -147,6 +156,7 @@ const styles = StyleSheet.create({
   image: {
     width: "100%",
     height: "100%",
+    opacity: 0.7
   },
   coordinates: {
     position: "absolute",
